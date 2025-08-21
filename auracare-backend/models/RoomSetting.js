@@ -47,8 +47,7 @@ const roomSettingSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Index for faster lookups
-roomSettingSchema.index({ patientId: 1 });
+// Note: unique: true on patientId already creates an index; avoid duplicate schema.index
 
 // Pre-save hook to update timestamps
 roomSettingSchema.pre('save', function(next) {

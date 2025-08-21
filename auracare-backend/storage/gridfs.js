@@ -13,10 +13,18 @@ let bucket;
  * Initialize GridFS bucket
  */
 function initGridFS() {
-  if (!bucket) {
-    const conn = mongoose.connection.db;
-    bucket = new GridFSBucket(conn, { bucketName: 'media' });
+  // If already initialized, return it
+  if (bucket) return bucket;
+
+  // Ensure Mongo connection is ready
+  const conn = mongoose.connection;
+  if (!conn || conn.readyState !== 1 || !conn.db) {
+    // Not ready yet; don't throw, just delay init
+    console.warn('GridFS init delayed: MongoDB connection not ready');
+    return null;
   }
+
+  bucket = new GridFSBucket(conn.db, { bucketName: 'media' });
   return bucket;
 }
 
@@ -29,6 +37,9 @@ function initGridFS() {
 async function uploadFile(file, metadata = {}) {
   return new Promise((resolve, reject) => {
     const bucket = initGridFS();
+    if (!bucket) {
+      return reject(new Error('Storage not initialized yet. Please try again shortly.'));
+    }
     const filename = `${Date.now()}-${file.originalname.replace(/[^\w\d.-]/g, '')}`;
     const uploadStream = bucket.openUploadStream(filename, {
       contentType: file.mimetype,
@@ -74,6 +85,9 @@ async function uploadFile(file, metadata = {}) {
 async function getFileStream(fileId) {
   try {
     const bucket = initGridFS();
+    if (!bucket) {
+      throw new Error('Storage not initialized yet. Please try again shortly.');
+    }
     const fileIdObj = new ObjectId(fileId);
     
     const files = await bucket.find({ _id: fileIdObj }).toArray();
@@ -104,6 +118,9 @@ async function getFileStream(fileId) {
 async function deleteFile(fileId) {
   try {
     const bucket = initGridFS();
+    if (!bucket) {
+      throw new Error('Storage not initialized yet. Please try again shortly.');
+    }
     const fileIdObj = new ObjectId(fileId);
     
     await bucket.delete(fileIdObj);

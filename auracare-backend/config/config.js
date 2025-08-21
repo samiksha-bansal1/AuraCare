@@ -28,7 +28,11 @@ const config = {
   features: {
     alertSimulator: process.env.ALERT_SIMULATOR === 'on',
     vitalsPoller: {
-      enabled: true,
+      // Enable only if explicitly turned on in env
+      enabled: (() => {
+        const v = (process.env.VITALS_POLLER_ENABLED || 'off').toLowerCase();
+        return ['on', 'true', '1', 'yes'].includes(v);
+      })(),
       interval: parseInt(process.env.VITALS_POLLER_INTERVAL_MS || '3000', 10)
     }
   },
@@ -36,7 +40,7 @@ const config = {
   // External Services
   services: {
     fastapi: {
-      baseUrl: process.env.FASTAPI_BASE_URL || 'http://localhost:8000'
+      baseUrl: process.env.AI_SERVICE_URL || process.env.FASTAPI_BASE_URL || 'http://localhost:8000'
     }
   },
   

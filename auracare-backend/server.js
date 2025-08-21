@@ -6,7 +6,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const config = require('@/config/config');
 const { auditMiddleware } = require('@/utils/auditLogger');
-const socketAuth = require('@/middleware/socketAuth');
 const { init: initSocketService } = require('@/services/socketService');
 const { initVitalsPoller } = require('@/services/vitalsPoller');
 const logger = require('@/utils/logger');
@@ -132,14 +131,16 @@ app.use((err, req, res, next) => {
 // Socket.IO authentication middleware
 io.use(authenticateSocket);
 
-// Initialize vitals poller after socket is ready
 // Initialize socket service
-const { init: initSocketService } = require('./services/socketService');
 const socketService = initSocketService(io);
 
-// Initialize vitals poller with socket service
-const { initVitalsPoller } = require('./services/vitalsPoller');
-initVitalsPoller(io, socketService);
+// Initialize vitals poller with socket service only if enabled
+if (config.features.vitalsPoller.enabled) {
+  initVitalsPoller(io, socketService);
+  logger.info('Vitals poller enabled');
+} else {
+  logger.info('Vitals poller disabled');
+}
 
 // Socket.IO connection handling
 io.on("connection", (socket) => {
@@ -251,14 +252,38 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Something went wrong!" });
 });
 
-// Start server
-const PORT = config.port;
-server.listen(PORT, () => {
-  logger.info(`Server is running in ${config.env} mode on port ${PORT}`);
-  logger.info(`CORS allowed origins: ${config.cors.origins.join(', ')}`);
-  logger.info(`Vitals poller ${config.features.vitalsPoller.enabled ? 'enabled' : 'disabled'}`);
-  logger.info(`Alert simulator ${config.features.alertSimulator ? 'enabled' : 'disabled'}`);
-});
+// Start server with retry if port is in use
+const BASE_PORT = Number(config.port) || 5000;
+const MAX_PORT_RETRY = 5; // try up to 5 successive ports
+
+function startServer(port, attemptsLeft) {
+  const onListening = () => {
+    logger.info(`Server is running in ${config.env} mode on port ${port}`);
+    logger.info(`CORS allowed origins: ${config.cors.origins.join(', ')}`);
+    logger.info(`Vitals poller ${config.features.vitalsPoller.enabled ? 'enabled' : 'disabled'}`);
+    logger.info(`Alert simulator ${config.features.alertSimulator ? 'enabled' : 'disabled'}`);
+    // Remove the error handler once listening succeeded to avoid leaks
+    server.removeListener('error', onError);
+  };
+
+  const onError = (err) => {
+    if (err && err.code === 'EADDRINUSE' && attemptsLeft > 0) {
+      logger.error(`Port ${port} is in use. Trying port ${port + 1}...`);
+      server.removeListener('listening', onListening);
+      // Try next port with the same server instance
+      startServer(port + 1, attemptsLeft - 1);
+    } else {
+      logger.error('Failed to start server:', err);
+      process.exit(1);
+    }
+  };
+
+  server.once('listening', onListening);
+  server.once('error', onError);
+  server.listen(port);
+}
+
+startServer(BASE_PORT, MAX_PORT_RETRY);
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {

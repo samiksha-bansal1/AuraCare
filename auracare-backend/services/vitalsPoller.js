@@ -6,7 +6,8 @@ const logger = require('../utils/logger');
 
 // Configuration
 const POLL_INTERVAL_MS = 3000; // 3 seconds
-const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
+// Prefer AI_SERVICE_URL from .env for consistency with server.js, fallback to localhost
+const FASTAPI_BASE_URL = process.env.AI_SERVICE_URL || process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
 
 // Track last vitals for each patient
 const lastVitals = new Map();
