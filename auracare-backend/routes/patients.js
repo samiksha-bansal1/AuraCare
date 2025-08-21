@@ -1,0 +1,266 @@
+const express = require("express")
+const Joi = require("joi")
+const axios = require("axios")
+const Patient = require("../models/Patient")
+const EmotionData = require("../models/EmotionData")
+const { authenticate, authorize } = require("../middleware/authMiddleware")
+
+const router = express.Router()
+
+// All routes require authentication
+router.use(authenticate)
+
+// Get all patients (staff only)
+router.get("/", authorize("staff"), async (req, res) => {
+  try {
+    const patients = await Patient.find({ isActive: true })
+      .populate("assignedStaff", "name role")
+      .populate("familyMembers", "name relationship isApproved")
+      .sort({ admissionDate: -1 })
+
+    res.json(patients)
+  } catch (error) {
+    res.status(500).json({ error: "Server error" })
+  }
+})
+
+// Get specific patient details
+router.get("/:id", async (req, res) => {
+  try {
+    let patient;
+    
+    // Check if the id is a MongoDB ObjectId or a patientId string
+    if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      // It's a MongoDB ObjectId
+      patient = await Patient.findById(req.params.id)
+        .populate("assignedStaff", "name role department")
+        .populate("familyMembers", "name relationship isApproved")
+    } else {
+      // It's a patientId string (like "PAT001")
+      patient = await Patient.findOne({ patientId: req.params.id })
+        .populate("assignedStaff", "name role department")
+        .populate("familyMembers", "name relationship isApproved")
+    }
+
+    if (!patient) {
+      return res.status(404).json({ error: "Patient not found" })
+    }
+
+    // Authorization check
+    if (req.userRole === "family") {
+      const familyMember = patient.familyMembers.find((fm) => fm._id.toString() === req.user._id.toString())
+      if (!familyMember || !familyMember.isApproved) {
+        return res.status(403).json({ error: "Access denied" })
+      }
+    }
+
+    res.json(patient)
+  } catch (error) {
+    res.status(500).json({ error: "Server error" })
+  }
+})
+
+// Get patient vital signs from external FastAPI service
+router.get("/:id/vitals", async (req, res) => {
+  try {
+    let patient;
+    
+    // Check if the id is a MongoDB ObjectId or a patientId string
+    if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      // It's a MongoDB ObjectId
+      patient = await Patient.findById(req.params.id)
+    } else {
+      // It's a patientId string (like "PAT001")
+      patient = await Patient.findOne({ patientId: req.params.id })
+    }
+
+    if (!patient) {
+      return res.status(404).json({ error: "Patient not found" })
+    }
+
+    // Authorization check for family members
+    if (req.userRole === "family") {
+      const familyMember = patient.familyMembers.find((fm) => fm._id.toString() === req.user._id.toString())
+      if (!familyMember || !familyMember.isApproved) {
+        return res.status(403).json({ error: "Access denied" })
+      }
+    }
+
+    // Get room number from patient data (assuming it's stored in patient document)
+    const roomNumber = patient.roomNumber || "101" // Default room number if not set
+
+    try {
+      // Fetch vital signs from external FastAPI service
+      const response = await axios.get(`${process.env.FASTAPI_SERVICE_URL}/vitals/${roomNumber}`, {
+        timeout: 5000 // 5 second timeout
+      })
+
+      const vitalSigns = response.data
+
+      res.json({
+        patientId: patient.patientId,
+        patientName: patient.name,
+        roomNumber: roomNumber,
+        vitalSigns: vitalSigns,
+        source: "external_api",
+        lastUpdated: vitalSigns.timestamp || new Date().toISOString()
+      })
+
+    } catch (apiError) {
+      console.error("FastAPI service error:", apiError.message)
+      
+      // Fallback to dummy data if external API fails
+      const dummyVitalSigns = generateDummyVitalSigns(roomNumber)
+      
+      res.json({
+        patientId: patient.patientId,
+        patientName: patient.name,
+        roomNumber: roomNumber,
+        vitalSigns: dummyVitalSigns,
+        source: "dummy_data",
+        lastUpdated: dummyVitalSigns.timestamp,
+        note: "Using dummy data due to external API unavailability"
+      })
+    }
+
+  } catch (error) {
+    console.error("Vital signs error:", error)
+    res.status(500).json({ error: "Server error" })
+  }
+})
+
+// Update patient vital signs (staff only) - This now updates the external service
+router.put("/:id/vitals", authorize("staff"), async (req, res) => {
+  try {
+    const vitalSignsSchema = Joi.object({
+      heartRate: Joi.number().min(0).max(300),
+      bloodPressure: Joi.object({
+        systolic: Joi.number().min(0).max(300),
+        diastolic: Joi.number().min(0).max(200),
+      }),
+      oxygenSaturation: Joi.number().min(0).max(100),
+      temperature: Joi.number().min(90).max(110),
+      respiratoryRate: Joi.number().min(0).max(60),
+    })
+
+    const { error } = vitalSignsSchema.validate(req.body)
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message })
+    }
+
+    let patient;
+    
+    // Check if the id is a MongoDB ObjectId or a patientId string
+    if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      // It's a MongoDB ObjectId
+      patient = await Patient.findById(req.params.id)
+    } else {
+      // It's a patientId string (like "PAT001")
+      patient = await Patient.findOne({ patientId: req.params.id })
+    }
+
+    if (!patient) {
+      return res.status(404).json({ error: "Patient not found" })
+    }
+
+    const roomNumber = patient.roomNumber || "101"
+
+    try {
+      // Update vital signs in external FastAPI service
+      const response = await axios.put(`${process.env.FASTAPI_SERVICE_URL}/vitals/${roomNumber}`, {
+        ...req.body,
+        timestamp: new Date().toISOString()
+      }, {
+        timeout: 5000
+      })
+
+      res.json({
+        message: "Vital signs updated successfully in external service",
+        roomNumber: roomNumber,
+        vitalSigns: response.data,
+        source: "external_api"
+      })
+
+    } catch (apiError) {
+      console.error("FastAPI service error:", apiError.message)
+      
+      // Fallback: Store in local database if external API fails
+      patient.vitalSigns = {
+        ...req.body,
+        lastUpdated: new Date(),
+      }
+      await patient.save()
+
+      res.json({
+        message: "Vital signs updated in local database (external service unavailable)",
+        roomNumber: roomNumber,
+        vitalSigns: patient.vitalSigns,
+        source: "local_database",
+        note: "External API unavailable, data stored locally"
+      })
+    }
+
+  } catch (error) {
+    res.status(500).json({ error: "Server error" })
+  }
+})
+
+// Get patient's emotion history
+router.get("/:id/emotions", async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id)
+    if (!patient) {
+      return res.status(404).json({ error: "Patient not found" })
+    }
+
+    // Authorization check for family members
+    if (req.userRole === "family") {
+      const familyMember = patient.familyMembers.find((fm) => fm._id.toString() === req.user._id.toString())
+      if (!familyMember) {
+        return res.status(403).json({ error: "Access denied" })
+      }
+    }
+
+    const emotions = await EmotionData.find({ patientId: req.params.id }).sort({ timestamp: -1 }).limit(50)
+
+    res.json(emotions)
+  } catch (error) {
+    res.status(500).json({ error: "Server error" })
+  }
+})
+
+// Helper function to generate dummy vital signs data
+function generateDummyVitalSigns(roomNumber) {
+  const baseValues = {
+    "101": { heartRate: 72, systolic: 120, diastolic: 80, oxygen: 98, temp: 98.6, resp: 16 },
+    "102": { heartRate: 85, systolic: 135, diastolic: 85, oxygen: 96, temp: 99.1, resp: 18 },
+    "103": { heartRate: 68, systolic: 115, diastolic: 75, oxygen: 99, temp: 98.2, resp: 14 },
+    "104": { heartRate: 92, systolic: 145, diastolic: 90, oxygen: 94, temp: 100.2, resp: 20 },
+    "105": { heartRate: 78, systolic: 125, diastolic: 82, oxygen: 97, temp: 98.8, resp: 17 }
+  }
+
+  const base = baseValues[roomNumber] || baseValues["101"]
+  
+  // Add some realistic variation
+  const variation = 0.1 // 10% variation
+  const randomVariation = (value) => {
+    const change = (Math.random() - 0.5) * 2 * variation * value
+    return Math.round((value + change) * 10) / 10
+  }
+
+  return {
+    heartRate: randomVariation(base.heartRate),
+    bloodPressure: {
+      systolic: randomVariation(base.systolic),
+      diastolic: randomVariation(base.diastolic)
+    },
+    oxygenSaturation: randomVariation(base.oxygen),
+    temperature: randomVariation(base.temp),
+    respiratoryRate: randomVariation(base.resp),
+    timestamp: new Date().toISOString(),
+    roomNumber: roomNumber,
+    status: "normal" // normal, warning, critical
+  }
+}
+
+module.exports = router

@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    build:
+      context: .
+      target: development
+    container_name: auracare-app
+    command: npm run dev
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - MONGO_URI=mongodb://mongo:27017/auracare
+      - JWT_SECRET=dev_jwt_secret
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+      - FASTAPI_BASE_URL=http://fastapi:8000
+    depends_on:
+      - mongo
+      - redis
+      - fastapi
+    networks:
+      - auracare-network
+
+  # MongoDB service
+  mongo:
+    image: mongo:6.0
+    container_name: auracare-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=auracare
+    networks:
+      - auracare-network
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7.0
+    container_name: auracare-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - auracare-network
+
+  # FastAPI service (mocked for development)
+  fastapi:
+    image: python:3.9-slim
+    container_name: auracare-fastapi
+    command: >
+      sh -c "pip install fastapi uvicorn && 
+             echo 'from fastapi import FastAPI; app = FastAPI()' > main.py && 
+             echo '@app.get("/")' >> main.py && 
+             echo 'def read_root(): return {"message": "Mock FastAPI"}' >> main.py && 
+             uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    networks:
+      - auracare-network
+
+  # MongoDB Compass (GUI for MongoDB)
+  mongo-express:
+    image: mongo-express:1.0
+    container_name: auracare-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=password
+    depends_on:
+      - mongo
+    networks:
+      - auracare-network
+
+  # Redis Commander (GUI for Redis)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: auracare-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8082:8081"
+    depends_on:
+      - redis
+    networks:
+      - auracare-network
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  auracare-network:
+    driver: bridge
