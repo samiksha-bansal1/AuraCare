@@ -98,6 +98,34 @@ router.post("/share-content", authorize("family"), upload.single("file"), async 
   }
 })
 
+// Get all family members (admin only)
+router.get("/", authorize("admin"), async (req, res) => {
+  try {
+    const familyMembers = await FamilyMember.find()
+      .populate("patientId", "name patientId roomNumber")
+      .select("-password")
+      .sort({ createdAt: -1 });
+
+    // Transform data to include patient name for frontend
+    const transformedData = familyMembers.map(fm => ({
+      id: fm._id,
+      name: fm.name,
+      email: fm.email,
+      phone: fm.phone,
+      relationship: fm.relationship,
+      patientId: fm.patientId._id,
+      patientName: fm.patientId.name,
+      accessLevel: fm.accessLevel,
+      isApproved: fm.isApproved,
+      lastLogin: fm.lastLogin
+    }));
+
+    res.json(transformedData);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // Get pending family approvals (staff only)
 router.get("/pending-approvals", authorize("staff"), async (req, res) => {
   try {
@@ -111,6 +139,43 @@ router.get("/pending-approvals", authorize("staff"), async (req, res) => {
     res.status(500).json({ error: "Server error" })
   }
 })
+
+// Approve family member (admin only)
+router.put("/:id/approve", authorize("admin"), async (req, res) => {
+  try {
+    const family = await FamilyMember.findById(req.params.id);
+    if (!family) {
+      return res.status(404).json({ error: "Family member not found" });
+    }
+
+    family.isApproved = true;
+    await family.save();
+
+    res.json({ message: "Family member approved successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Deactivate family member (admin only)
+router.put("/:id/deactivate", authorize("admin"), async (req, res) => {
+  try {
+    const family = await FamilyMember.findById(req.params.id);
+    if (!family) {
+      return res.status(404).json({ error: "Family member not found" });
+    }
+
+    // Remove from patient's family list
+    await Patient.findByIdAndUpdate(family.patientId, { $pull: { familyMembers: family._id } });
+    
+    // Delete the family member
+    await FamilyMember.findByIdAndDelete(req.params.id);
+
+    res.json({ message: "Family member deactivated successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // Approve/reject family member (staff only)
 router.put("/approve/:id", authorize("staff"), async (req, res) => {

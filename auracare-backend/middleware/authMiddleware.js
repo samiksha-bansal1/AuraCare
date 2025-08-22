@@ -15,7 +15,7 @@ const authenticate = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
     let user
-    if (decoded.role === "staff" || decoded.role === "nurse") {
+    if (decoded.role === "staff" || decoded.role === "nurse" || decoded.role === "admin") {
       user = await Staff.findById(decoded.id).select("-password")
     } else if (decoded.role === "family") {
       user = await FamilyMember.findById(decoded.id).select("-password")

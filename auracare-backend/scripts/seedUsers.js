@@ -48,6 +48,25 @@ async function upsertStaff() {
   return staff
 }
 
+async function upsertAdmin() {
+  const data = {
+    staffId: 'ADMIN001',
+    name: 'Admin User',
+    email: 'admin@hospital.test',
+    password: 'Admin123!',
+    role: 'admin',
+    department: 'Administration',
+  }
+  let admin = await Staff.findOne({ email: data.email })
+  if (!admin) {
+    admin = await Staff.create(data)
+    console.log(`[seed] Admin created: ${admin._id}`)
+  } else {
+    console.log(`[seed] Admin exists: ${admin._id}`)
+  }
+  return admin
+}
+
 async function upsertFamily(patient) {
   const data = {
     name: 'Jane Doe',
@@ -98,6 +117,7 @@ async function main() {
 
     const patient = await upsertPatient()
     const staff = await upsertStaff()
+    const admin = await upsertAdmin()
     const family = await upsertFamily(patient)
 
     await linkRelations(patient, staff, family)
@@ -112,6 +132,10 @@ async function main() {
     console.log('\nStaff (Nurse) Credentials:')
     console.log('  email: nurse1@hospital.test')
     console.log('  password: Passw0rd!')
+
+    console.log('\nAdmin Credentials:')
+    console.log('  email: admin@hospital.test')
+    console.log('  password: Admin123!')
 
     console.log('\nFamily Credentials:')
     console.log('  email: jane.doe@test.com')

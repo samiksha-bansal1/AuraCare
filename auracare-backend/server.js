@@ -17,6 +17,7 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth");
 const patientRoutes = require("./routes/patients");
 const familyRoutes = require("./routes/family");
+const staffRoutes = require("./routes/staff");
 const alertRoutes = require("./routes/alerts");
 const patientRequestRoutes = require("./routes/patientRequests");
 const historyRoutes = require("./routes/history");
@@ -78,6 +79,7 @@ const routes = [
   { path: '/api/auth', router: require('@/routes/auth') },
   { path: '/api/patients', router: require('@/routes/patients') },
   { path: '/api/family', router: require('@/routes/family') },
+  { path: '/api/staff', router: require('@/routes/staff') },
   { path: '/api/alerts', router: require('@/routes/alerts') },
   { path: '/api/patient-requests', router: require('@/routes/patientRequests') },
   { path: '/api/history', router: require('@/routes/history') },

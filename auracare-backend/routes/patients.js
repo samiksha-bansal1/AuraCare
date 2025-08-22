@@ -10,8 +10,8 @@ const router = express.Router()
 // All routes require authentication
 router.use(authenticate)
 
-// Get all patients (staff only)
-router.get("/", authorize("staff"), async (req, res) => {
+// Get all patients (staff and admin only)
+router.get("/", authorize("staff", "admin"), async (req, res) => {
   try {
     const patients = await Patient.find({ isActive: true })
       .populate("assignedStaff", "name role")
@@ -129,8 +129,8 @@ router.get("/:id/vitals", async (req, res) => {
   }
 })
 
-// Update patient vital signs (staff only) - This now updates the external service
-router.put("/:id/vitals", authorize("staff"), async (req, res) => {
+// Update patient vital signs (staff and admin only) - This now updates the external service
+router.put("/:id/vitals", authorize("staff", "admin"), async (req, res) => {
   try {
     const vitalSignsSchema = Joi.object({
       heartRate: Joi.number().min(0).max(300),
@@ -228,6 +228,42 @@ router.get("/:id/emotions", async (req, res) => {
     res.status(500).json({ error: "Server error" })
   }
 })
+
+// Deactivate/activate patient (admin only)
+router.put("/:id/deactivate", authorize("admin"), async (req, res) => {
+  try {
+    let patient;
+    
+    // Check if the id is a MongoDB ObjectId or a patientId string
+    if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      patient = await Patient.findById(req.params.id);
+    } else {
+      patient = await Patient.findOne({ patientId: req.params.id });
+    }
+
+    if (!patient) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    patient.isActive = !patient.isActive;
+    await patient.save();
+
+    res.json({ 
+      message: `Patient ${patient.isActive ? 'activated' : 'deactivated'} successfully`,
+      patient: {
+        id: patient._id,
+        patientId: patient.patientId,
+        name: patient.name,
+        age: patient.age,
+        condition: patient.condition,
+        roomNumber: patient.roomNumber,
+        isActive: patient.isActive
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // Helper function to generate dummy vital signs data
 function generateDummyVitalSigns(roomNumber) {

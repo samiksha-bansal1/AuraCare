@@ -6,6 +6,7 @@ import LoginScreen from './components/LoginScreen';
 import PatientInterface from './components/PatientInterface';
 import NurseDashboard from './components/NurseDashboard';
 import FamilyDashboard from './components/FamilyDashboard';
+import AdminDashboard from './components/AdminDashboard';
 import LoadingScreen from './components/LoadingScreen';
 import IntegrationTest from './components/IntegrationTest';
 
@@ -42,6 +43,9 @@ const Dashboard: React.FC = () => {
       )}
       {user.type === 'family' && (
         <FamilyDashboard user={user} onLogout={logout} />
+      )}
+      {user.role === 'admin' && (
+        <AdminDashboard />
       )}
     </div>
   );

@@ -83,6 +83,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           email: payload.email!,
           password: payload.password!,
         });
+      } else if (payload.type === "admin") {
+        // ✅ call admin API (uses same endpoint as nurse but with admin role)
+        data = await authAPI.loginAdmin({
+          email: payload.email!,
+          password: payload.password!,
+        });
       } else if (payload.type === "family") {
         // ✅ call family API
         data = await authAPI.loginFamily({
@@ -97,8 +103,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const rawUser = data.user as User;
       const normalizedUser: User = {
         ...rawUser,
-        // Ensure type is set based on the login payload (backend role-specific endpoints may omit it)
-        type: payload.type,
+        // For admin users, use the actual role from backend response
+        // For others, use the login payload type
+        type: rawUser.role === 'admin' ? 'admin' : payload.type,
       };
       persist(normalizedUser, data.token as string);
     } catch (err: any) {

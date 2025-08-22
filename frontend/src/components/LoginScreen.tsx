@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 const LoginScreen: React.FC = () => {
   const { login, loading, error, clearError } = useAuth();
   const navigate = useNavigate();
-  const [userType, setUserType] = useState<'patient' | 'nurse' | 'family'>('patient');
+  const [userType, setUserType] = useState<'patient' | 'nurse' | 'family' | 'admin'>('patient');
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -27,7 +27,7 @@ const LoginScreen: React.FC = () => {
         if (isValid) {
           credentials = {
             type: 'patient',
-            id: formData.id, 
+            id: formData.id,
             name: formData.name,
           };
         }
@@ -50,6 +50,17 @@ const LoginScreen: React.FC = () => {
           credentials = {
             type: 'family',
             email: formData.name, // ✅ backend expects email
+            password: formData.password,
+          };
+        }
+        break;
+
+      case 'admin':
+        isValid = Boolean(formData.id && formData.password);
+        if (isValid) {
+          credentials = {
+            type: 'admin',
+            email: formData.id, // Email field
             password: formData.password,
           };
         }
@@ -100,7 +111,7 @@ const LoginScreen: React.FC = () => {
           )}
 
           {/* User Type Selection */}
-          <div className="grid grid-cols-3 gap-2 mb-6">
+          <div className="grid grid-cols-4 gap-2 mb-6">
             <button
               type="button"
               onClick={() => {
@@ -142,6 +153,20 @@ const LoginScreen: React.FC = () => {
             >
               <Users className="w-6 h-6 mb-1" />
               <span className="text-xs font-medium">Family</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUserType('admin');
+                resetForm();
+              }}
+              className={`flex flex-col items-center p-3 rounded-xl transition-all ${userType === 'admin'
+                ? 'bg-purple-100 text-purple-600 border-2 border-purple-200'
+                : 'bg-slate-50 text-slate-600 border-2 border-transparent hover:bg-slate-100'
+                }`}
+            >
+              <Shield className="w-6 h-6 mb-1" />
+              <span className="text-xs font-medium">Admin</span>
             </button>
           </div>
 
@@ -239,6 +264,52 @@ const LoginScreen: React.FC = () => {
                     type="email"
                     name="name"
                     value={formData.name}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Enter Email"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Password *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12"
+                      placeholder="Enter Password"
+                      required
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      disabled={loading}
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Admin Form */}
+            {userType === 'admin' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    name="id"
+                    value={formData.id}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     placeholder="Enter Email"

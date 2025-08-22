@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Unified login validation schema
 const unifiedLoginSchema = Joi.object({
-  type: Joi.string().valid('patient', 'nurse', 'family').required(),
+  type: Joi.string().valid('patient', 'nurse', 'family', 'admin').required(),
   id: Joi.string().when('type', {
     is: 'patient',
     then: Joi.required(),
@@ -21,18 +21,18 @@ const unifiedLoginSchema = Joi.object({
     otherwise: Joi.optional()
   }),
   password: Joi.string().when('type', {
-    is: Joi.string().valid('nurse', 'family'),
+    is: Joi.string().valid('nurse', 'family', 'admin'),
     then: Joi.required(),
     otherwise: Joi.optional()
   }),
   patientId: Joi.string().when('type', {
-    is: Joi.string().valid('nurse', 'family'),
+    is: 'family',
     then: Joi.required(),
     otherwise: Joi.optional()
   }),
-  email: Joi.string().email().when('type', {
-    is: Joi.string().valid('nurse', 'family'),
-    then: Joi.required(),
+  email: Joi.string().when('type', {
+    is: Joi.string().valid('nurse', 'family', 'admin'),
+    then: Joi.string().email({ tlds: { allow: false } }).required(),
     otherwise: Joi.optional()
   })
 });
@@ -40,8 +40,10 @@ const unifiedLoginSchema = Joi.object({
 // Unified Login Route
 router.post("/login", async (req, res) => {
   try {
+    console.log('Login request body:', req.body);
     const { error } = unifiedLoginSchema.validate(req.body);
     if (error) {
+      console.log('Validation error:', error.details);
       return res.status(400).json({ error: error.details[0].message });
     }
 
@@ -80,19 +82,20 @@ router.post("/login", async (req, res) => {
         break;
 
       case 'nurse':
-        // Nurse login - use email and password
+      case 'admin':
+        // Nurse/Admin login - use email and password
         const nurse = await Staff.findOne({ 
           email: email || id, // Allow both email and staffId
-          role: 'nurse',
+          role: type === 'admin' ? 'admin' : { $in: ['nurse', 'admin'] }, // Allow both nurse and admin roles
           isActive: true 
         });
         
         if (!nurse || !(await nurse.comparePassword(password))) {
-          return res.status(401).json({ error: "Invalid nurse credentials" });
+          return res.status(401).json({ error: "Invalid credentials" });
         }
 
         const nurseToken = jwt.sign(
-          { id: nurse._id, role: "nurse" },
+          { id: nurse._id, role: nurse.role }, // Use actual role from database
           process.env.JWT_SECRET,
           { expiresIn: "24h" }
         );
@@ -101,7 +104,7 @@ router.post("/login", async (req, res) => {
           token: nurseToken,
           user: {
             id: nurse._id,
-            type: 'nurse',
+            type: nurse.role === 'admin' ? 'admin' : 'nurse', // Return actual type based on role
             name: nurse.name,
             email: nurse.email,
             role: nurse.role,
@@ -157,22 +160,23 @@ router.post("/login", async (req, res) => {
 
 // Validation schemas
 const staffLoginSchema = Joi.object({
-  email: Joi.string().email().required(),
+  email: Joi.string().email({ tlds: { allow: false } }).required(),
   password: Joi.string().required(),
 });
 
 const familyLoginSchema = Joi.object({
-  email: Joi.string().email().required(),
+  email: Joi.string().email({ tlds: { allow: false } }).required(),
   password: Joi.string().required(),
 });
 
 const familyRegisterSchema = Joi.object({
   name: Joi.string().required(),
-  email: Joi.string().email().required(),
+  email: Joi.string().email({ tlds: { allow: false } }).required(),
   password: Joi.string().min(6).required(),
   phone: Joi.string().required(),
   relationship: Joi.string().required(),
   patientId: Joi.string().required(),
+  accessLevel: Joi.string().valid('full','limited').optional(),
 });
 
 const patientRegisterSchema = Joi.object({
@@ -186,7 +190,7 @@ const patientRegisterSchema = Joi.object({
 const staffRegisterSchema = Joi.object({
   staffId: Joi.string().required(),
   name: Joi.string().required(),
-  email: Joi.string().email().required(),
+  email: Joi.string().email({ tlds: { allow: false } }).required(),
   password: Joi.string().min(6).required(),
   role: Joi.string().valid("doctor", "nurse", "admin").required(),
   department: Joi.string().required(),
