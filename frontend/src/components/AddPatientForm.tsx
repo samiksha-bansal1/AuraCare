@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { adminAPI } from '../services/api';
 
 interface AddPatientFormProps {
@@ -9,6 +9,7 @@ interface AddPatientFormProps {
 interface PatientFormData {
     patientId: string;
     name: string;
+    email: string;
     age: number;
     condition: string;
     roomNumber: string;
@@ -18,46 +19,87 @@ const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSuccess, onCancel }) 
     const [formData, setFormData] = useState<PatientFormData>({
         patientId: '',
         name: '',
+        email: '',
         age: 0,
         condition: '',
-        roomNumber: '101'
+        roomNumber: '101'  // Default value matches backend
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+    const validateForm = (data: PatientFormData): Record<string, string> => {
+        const errors: Record<string, string> = {};
+        
+        // Patient ID validation
+        if (!data.patientId.trim()) {
+            errors.patientId = 'Patient ID is required';
+        }
+        
+        // Name validation
+        if (!data.name.trim()) {
+            errors.name = 'Full name is required';
+        }
+        
+        // Email validation
+        if (!data.email.trim()) {
+            errors.email = 'Email is required';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+            errors.email = 'Please enter a valid email address';
+        }
+        
+        // Age validation (0-150 as per backend)
+        if (isNaN(data.age) || data.age < 0 || data.age > 150) {
+            errors.age = 'Age must be between 0 and 150';
+        }
+        
+        // Condition validation
+        if (!data.condition.trim()) {
+            errors.condition = 'Medical condition is required';
+        }
+        
+        // Room number validation
+        if (!data.roomNumber) {
+            errors.roomNumber = 'Room number is required';
+        }
+        
+        return errors;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Create a sanitized version of the form data
+        const sanitizedData = {
+            patientId: formData.patientId.trim(),
+            name: formData.name.trim(),
+            email: formData.email.toLowerCase().trim(),
+            age: Number(formData.age),
+            condition: formData.condition.trim(),
+            roomNumber: formData.roomNumber
+        };
+        
+        // Validate form data
+        const validationErrors = validateForm(sanitizedData);
+        if (Object.keys(validationErrors).length > 0) {
+            setFieldErrors(validationErrors);
+            return;
+        }
+        
         setLoading(true);
         setError(null);
         setFieldErrors({});
 
         try {
-            const sanitized = {
-                patientId: String(formData.patientId || '')
-                    .trim()
-                    .toUpperCase(),
-                name: String(formData.name || '').trim(),
-                age: Number(String(formData.age ?? '').replace(/[^0-9]/g, '')),
-                condition: String(formData.condition || '').trim(),
-                roomNumber: String(formData.roomNumber || '').replace(/[^0-9]/g, ''),
-            };
-
-            // simple client-side validation aligned with backend
-            const errs: Record<string, string> = {};
-            if (!sanitized.patientId) errs.patientId = 'Patient ID is required';
-            if (!sanitized.name) errs.name = 'Full name is required';
-            if (Number.isNaN(sanitized.age)) errs.age = 'Age must be a number';
-            if (sanitized.age < 0 || sanitized.age > 150) errs.age = 'Age must be between 0 and 150';
-            if (!sanitized.condition) errs.condition = 'Medical condition is required';
-            if (!sanitized.roomNumber) errs.roomNumber = 'Room number is required';
-
-            if (Object.keys(errs).length) {
-                setFieldErrors(errs);
-                throw new Error('Please correct the highlighted fields');
-            }
-
-            await adminAPI.addPatient(sanitized);
+            // Send exactly what backend expects
+            await adminAPI.addPatient({
+                patientId: sanitizedData.patientId,
+                name: sanitizedData.name,
+                email: sanitizedData.email,
+                age: sanitizedData.age,
+                condition: sanitizedData.condition,
+                roomNumber: sanitizedData.roomNumber
+            });
             onSuccess();
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.message || 'Failed to add patient';
@@ -69,14 +111,19 @@ const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSuccess, onCancel }) 
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => {
-            let next: any = value;
-            if (name === 'patientId') next = value.toUpperCase();
-            if (name === 'age') next = value.replace(/[^0-9]/g, '');
-            if (name === 'roomNumber') next = value.replace(/[^0-9]/g, '');
-            return { ...prev, [name]: next } as PatientFormData;
-        });
-        setFieldErrors(prev => ({ ...prev, [name]: '' }));
+        setFormData(prev => ({
+            ...prev,
+            [name]: name === 'age' ? parseInt(value, 10) || 0 : value
+        }));
+        
+        // Clear field error when user types
+        if (fieldErrors[name]) {
+            setFieldErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[name];
+                return newErrors;
+            });
+        }
     };
 
     const isSubmitDisabled = useMemo(() => {
@@ -148,6 +195,25 @@ const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSuccess, onCancel }) 
                             />
                             {fieldErrors.name && (
                                 <p className="mt-1 text-xs text-red-600">{fieldErrors.name}</p>
+                            )}
+                        </div>
+
+                        <div>
+                            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                                Email *
+                            </label>
+                            <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                required
+                                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="patient@example.com"
+                            />
+                            {fieldErrors.email && (
+                                <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>
                             )}
                         </div>
 

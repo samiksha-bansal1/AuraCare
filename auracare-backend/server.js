@@ -76,18 +76,18 @@ initGridFS();
 
 // API Routes
 const routes = [
-  { path: '/api/auth', router: require('@/routes/auth') },
-  { path: '/api/patients', router: require('@/routes/patients') },
-  { path: '/api/family', router: require('@/routes/family') },
-  { path: '/api/staff', router: require('@/routes/staff') },
-  { path: '/api/alerts', router: require('@/routes/alerts') },
-  { path: '/api/patient-requests', router: require('@/routes/patientRequests') },
-  { path: '/api/history', router: require('@/routes/history') },
-  { path: '/api/media', router: require('@/routes/media') },
-  { path: '/api/notes', router: require('@/routes/notes') },
-  { path: '/api/reports', router: require('@/routes/reports') },
-  { path: '/api/room-settings', router: require('@/routes/roomSettings') },
-  { path: '/api/emotions', router: require('@/routes/emotions') }
+  { path: '/api/auth', router: require('./routes/auth') },
+  { path: '/api/patients', router: require('./routes/patients') },
+  { path: '/api/family', router: require('./routes/family') },
+  { path: '/api/staff', router: require('./routes/staff') },
+  { path: '/api/alerts', router: require('./routes/alerts') },
+  { path: '/api/patient-requests', router: require('./routes/patientRequests') },
+  { path: '/api/history', router: require('./routes/history') },
+  { path: '/api/media', router: require('./routes/media') },
+  { path: '/api/notes', router: require('./routes/notes') },
+  { path: '/api/reports', router: require('./routes/reports') },
+  { path: '/api/room-settings', router: require('./routes/roomSettings') },
+  { path: '/api/emotions', router: require('./routes/emotions') }
 ];
 
 // Register routes

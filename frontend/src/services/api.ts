@@ -115,11 +115,12 @@ export const adminAPI = {
   addPatient: async (patientData: {
     patientId: string;
     name: string;
+    email: string;
     age: number;
     condition: string;
     roomNumber: string;
   }) => {
-    const response = await api.post('/auth/patient/register', patientData);
+    const response = await api.post('/patients/register', patientData);
     return response.data;
   },
 

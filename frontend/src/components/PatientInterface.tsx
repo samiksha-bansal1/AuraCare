@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import VideoStream from './VideoStream';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function AuraCareDashboard() {
-  const { user } = useAuth();
-  const [logs, setLogs] = useState([]);
+  const { user, logout } = useAuth();
+  const [logs, setLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [vitals, setVitals] = useState({
     heartRate: 76,
@@ -71,9 +71,9 @@ export default function AuraCareDashboard() {
     setLighting(moodType === "Calm" ? "Soft White" : moodType === "Alert" ? "Bright White" : "Normal");
   };
 
-  const handleQuickAction = (message) => {
+  const handleQuickAction = (message: string): void => {
     const log = `${new Date().toLocaleTimeString()} - ${message}`;
-    setLogs((prev) => [...prev, log]);
+    setLogs((prev: string[]) => [...prev, log]);
   };
 
   // Compute and persist active signaling room for nurse auto-join
@@ -101,9 +101,17 @@ export default function AuraCareDashboard() {
   return (
     <div className="min-h-screen h-screen bg-gray-100 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="flex justify-between items-center p-4 bg-white shadow h-[60px]">
-        <h1 className="text-xl font-semibold">AuraCare Ventilated Patient Dashboard</h1>
-        <div className="px-3 py-1 bg-green-100 text-green-800 rounded">System Online</div>
+      <header className="mb-8 flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-indigo-900 mb-2">AuraCare Ventilated Patient Dashboard</h1>
+          <p className="text-indigo-700">Welcome, {user?.name || 'Patient'}</p>
+        </div>
+        <button
+          onClick={logout}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          Sign Out
+        </button>
       </header>
 
       <div className="flex flex-1 h-full overflow-hidden">

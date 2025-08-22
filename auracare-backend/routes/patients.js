@@ -10,6 +10,75 @@ const router = express.Router()
 // All routes require authentication
 router.use(authenticate)
 
+// Register a new patient (staff and admin only)
+router.post('/register', (req, res, next) => {
+  console.log('Register patient route hit');
+  console.log('Request body:', req.body);
+  next();
+}, authorize('staff', 'admin'), async (req, res) => {
+  try {
+    const patientSchema = Joi.object({
+      patientId: Joi.string().required(),
+      name: Joi.string().required(),
+      email: Joi.string().email().required(),
+      age: Joi.number().min(0).max(150).required(),
+      condition: Joi.string().required(),
+      roomNumber: Joi.string().default('101')
+    });
+
+    const { error } = patientSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+
+    const { patientId, name, email, age, condition, roomNumber } = req.body;
+
+    // Check if patient ID already exists
+    const existingPatient = await Patient.findOne({ patientId });
+    if (existingPatient) {
+      return res.status(400).json({ error: 'Patient ID already exists' });
+    }
+
+    // Check if room is already occupied
+    const roomOccupied = await Patient.findOne({ 
+      roomNumber,
+      isActive: true 
+    });
+    
+    if (roomOccupied) {
+      return res.status(400).json({ 
+        error: 'Room is already occupied by another patient' 
+      });
+    }
+
+    // Create new patient
+    const patient = new Patient({
+      patientId,
+      name,
+      email: email.toLowerCase().trim(),
+      age,
+      condition,
+      roomNumber,
+      admissionDate: new Date(),
+      isActive: true
+    });
+
+    await patient.save();
+
+    // Remove sensitive data from response
+    const patientResponse = patient.toObject();
+    delete patientResponse.__v;
+
+    res.status(201).json({
+      message: 'Patient registered successfully',
+      patient: patientResponse
+    });
+  } catch (error) {
+    console.error('Patient registration error:', error);
+    res.status(500).json({ error: 'Failed to register patient' });
+  }
+});
+
 // Get all patients (staff and admin only)
 router.get("/", authorize("staff", "admin"), async (req, res) => {
   try {
