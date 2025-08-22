@@ -79,8 +79,8 @@ router.post('/register', (req, res, next) => {
   }
 });
 
-// Get all patients (staff and admin only)
-router.get("/", authorize("staff", "admin"), async (req, res) => {
+// Get all patients (staff, nurse and admin only)
+router.get("/", authorize("staff", "nurse", "admin"), async (req, res) => {
   try {
     const patients = await Patient.find({ isActive: true })
       .populate("assignedStaff", "name role")
@@ -367,5 +367,174 @@ function generateDummyVitalSigns(roomNumber) {
     status: "normal" // normal, warning, critical
   }
 }
+
+// Import additional models for nested routes
+const ProgressNote = require('../models/ProgressNote');
+const AuditLog = require('../models/AuditLog');
+
+// Notes routes nested under patients
+// POST /api/patients/:id/notes
+router.post('/:id/notes', authenticate, authorize(['staff', 'nurse', 'doctor']), async (req, res) => {
+  try {
+    const { text, visibility = 'staff', tags = [] } = req.body;
+    const note = new ProgressNote({
+      patientId: req.params.id,
+      author: {
+        id: req.user._id,
+        model: req.user.role === 'doctor' ? 'Doctor' : 'Staff',
+        name: req.user.name
+      },
+      text,
+      visibility,
+      tags: [...new Set(tags.map(t => t.toLowerCase().trim()))]
+    });
+
+    await note.save();
+
+    // Log the action
+    await AuditLog.create({
+      action: 'create',
+      entity: 'ProgressNote',
+      entityId: note._id,
+      patientId: req.params.id,
+      performedBy: { id: req.user._id, role: req.user.role, name: req.user.name },
+      timestamp: new Date()
+    });
+
+    res.status(201).json(note);
+  } catch (error) {
+    console.error('Error creating note:', error);
+    res.status(500).json({ error: 'Failed to create note' });
+  }
+});
+
+// GET /api/patients/:id/notes
+router.get('/:id/notes', authenticate, authorize(['staff', 'nurse', 'doctor', 'family']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const query = { patientId: id };
+    
+    // Family can only see notes marked as visible to family
+    if (req.userRole === 'family') {
+      query.visibility = 'family';
+    }
+
+    const notes = await ProgressNote.find(query)
+      .sort({ createdAt: -1 })
+      .populate('author.id', 'name');
+      
+    res.json(notes);
+  } catch (error) {
+    console.error('Error fetching notes:', error);
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+});
+
+// Media routes nested under patients
+const multer = require('multer');
+const { GridFSBucket } = require('mongodb');
+const mongoose = require('mongoose');
+const Media = require('../models/Media');
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10485760, // 10MB default
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = process.env.ALLOWED_FILE_TYPES?.split(',') || [
+      'image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'audio/mpeg', 'audio/wav',
+      'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('File type not allowed'), false);
+    }
+  }
+});
+
+// POST /api/patients/:id/media
+router.post('/:id/media', authenticate, authorize(['staff', 'nurse', 'doctor', 'family']), upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { title, description, type } = req.body;
+    const patientId = req.params.id;
+
+    // Create GridFS bucket
+    const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
+
+    // Upload file to GridFS
+    const uploadStream = bucket.openUploadStream(req.file.originalname, {
+      metadata: {
+        patientId,
+        uploadedBy: req.user._id,
+        uploadedByRole: req.user.role,
+        title: title || req.file.originalname,
+        description: description || '',
+        type: type || req.file.mimetype,
+        originalName: req.file.originalname,
+        size: req.file.size
+      }
+    });
+
+    uploadStream.end(req.file.buffer);
+
+    uploadStream.on('finish', async () => {
+      try {
+        // Save media record
+        const media = new Media({
+          patientId,
+          title: title || req.file.originalname,
+          description: description || '',
+          type: type || req.file.mimetype,
+          filename: req.file.originalname,
+          gridfsId: uploadStream.id,
+          size: req.file.size,
+          uploadedBy: {
+            id: req.user._id,
+            role: req.user.role,
+            name: req.user.name
+          }
+        });
+
+        await media.save();
+        res.status(201).json(media);
+      } catch (error) {
+        console.error('Error saving media record:', error);
+        res.status(500).json({ error: 'Failed to save media record' });
+      }
+    });
+
+    uploadStream.on('error', (error) => {
+      console.error('GridFS upload error:', error);
+      res.status(500).json({ error: 'File upload failed' });
+    });
+
+  } catch (error) {
+    console.error('Error uploading media:', error);
+    res.status(500).json({ error: 'Failed to upload media' });
+  }
+});
+
+// GET /api/patients/:id/media
+router.get('/:id/media', authenticate, authorize(['staff', 'nurse', 'doctor', 'family']), async (req, res) => {
+  try {
+    const media = await Media.find({ patientId: req.params.id })
+      .sort({ createdAt: -1 })
+      .populate('uploadedBy.id', 'name');
+      
+    res.json(media);
+  } catch (error) {
+    console.error('Error fetching media:', error);
+    res.status(500).json({ error: 'Failed to fetch media' });
+  }
+});
 
 module.exports = router

@@ -1,4 +1,4 @@
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
 
 const patientSchema = new mongoose.Schema(
   {
@@ -17,7 +17,7 @@ const patientSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true,
-      match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address']
+      match: [/^\S+@\S+\.\S+$/, "Please enter a valid email address"],
     },
     age: {
       type: Number,
@@ -74,11 +74,10 @@ const patientSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  },
-)
+  }
+);
 
-// Index for faster queries
-patientSchema.index({ patientId: 1 })
-patientSchema.index({ assignedStaff: 1 })
+// ✅ Keep this — improves query speed for assigned staff lookups
+patientSchema.index({ assignedStaff: 1 });
 
-module.exports = mongoose.model("Patient", patientSchema)
+module.exports = mongoose.model("Patient", patientSchema);

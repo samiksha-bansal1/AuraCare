@@ -4,8 +4,7 @@ const progressNoteSchema = new mongoose.Schema({
   patientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Patient',
-    required: true,
-    index: true
+    required: true
   },
   author: {
     id: {

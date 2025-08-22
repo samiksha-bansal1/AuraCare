@@ -59,7 +59,6 @@ familyMemberSchema.methods.comparePassword = async function (candidatePassword) 
   return await bcrypt.compare(candidatePassword, this.password)
 }
 
-familyMemberSchema.index({ email: 1 })
 familyMemberSchema.index({ patientId: 1 })
 
 module.exports = mongoose.model("FamilyMember", familyMemberSchema)

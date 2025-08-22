@@ -10,7 +10,7 @@ const AuditLog = require('../models/AuditLog');
 router.post(
   '/patients/:id/notes',
   authenticate,
-  authorize(['staff', 'doctor']),
+  authorize(['staff', 'nurse', 'doctor']),
   async (req, res) => {
     try {
       const { text, visibility = 'staff', tags = [] } = req.body;
@@ -60,7 +60,7 @@ router.post(
 // @route   GET /api/patients/:id/notes
 // @desc    Get notes for a patient with role-based visibility
 // @access  Private
-router.get('/patients/:id/notes', authenticate, async (req, res) => {
+router.get('/patients/:id/notes', authenticate, authorize(['staff', 'nurse', 'doctor', 'family']), async (req, res) => {
   try {
     const { id } = req.params;
     const query = { patientId: id };

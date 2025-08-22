@@ -5,8 +5,7 @@ const roomSettingSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Patient',
     required: true,
-    unique: true,
-    index: true
+    unique: true
   },
   mode: {
     type: String,

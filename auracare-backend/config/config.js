@@ -65,6 +65,7 @@ const requiredConfig = [
 requiredConfig.forEach(key => {
   if (!process.env[key] && process.env.NODE_ENV !== 'test') {
     console.error(`FATAL ERROR: ${key} is not defined`);
+    console.error(`Available env vars: ${Object.keys(process.env).filter(k => k.includes('MONGO') || k.includes('JWT')).join(', ')}`);
     process.exit(1);
   }
 });

@@ -1,12 +1,12 @@
-const mongoose = require("mongoose")
-const bcrypt = require("bcryptjs")
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
 const staffSchema = new mongoose.Schema(
   {
     staffId: {
       type: String,
       required: true,
-      unique: true,
+      unique: true, // ✅ this already creates a unique index
     },
     name: {
       type: String,
@@ -15,7 +15,7 @@ const staffSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      unique: true,
+      unique: true, // ✅ this already creates a unique index
     },
     password: {
       type: String,
@@ -43,22 +43,21 @@ const staffSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  },
-)
+  }
+);
 
-// Hash password before saving
+// ✅ Hash password before saving
 staffSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next()
-  this.password = await bcrypt.hash(this.password, 12)
-  next()
-})
+  if (!this.isModified("password")) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
 
-// Compare password method
+// ✅ Compare password method
 staffSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password)
-}
+  return await bcrypt.compare(candidatePassword, this.password);
+};
 
-staffSchema.index({ staffId: 1 })
-staffSchema.index({ email: 1 })
+// ❌ Removed duplicate indexes (Mongoose auto-handles unique fields)
 
-module.exports = mongoose.model("Staff", staffSchema)
+module.exports = mongoose.model("Staff", staffSchema);

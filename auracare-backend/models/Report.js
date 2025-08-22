@@ -4,8 +4,7 @@ const reportSchema = new mongoose.Schema({
   patientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Patient',
-    required: true,
-    index: true
+    required: true
   },
   uploadedBy: {
     id: {

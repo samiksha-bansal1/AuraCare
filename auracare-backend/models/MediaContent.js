@@ -4,8 +4,7 @@ const mediaContentSchema = new mongoose.Schema({
   patientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Patient',
-    required: true,
-    index: true
+    required: true
   },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -59,8 +58,7 @@ const mediaContentSchema = new mongoose.Schema({
   },
   isApproved: {
     type: Boolean,
-    default: false,
-    index: true
+    default: false
   },
   approvedBy: {
     type: mongoose.Schema.Types.ObjectId,
