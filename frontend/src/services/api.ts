@@ -13,17 +13,23 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const stored = localStorage.getItem('auracare_auth');
+    console.log('🔍 API Request interceptor - stored auth:', !!stored);
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
         const token: string | undefined = parsed?.token;
+        console.log('🔑 Token found in storage:', !!token);
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          console.log('✅ Authorization header set');
         }
-      } catch {
-        // ignore JSON parse errors
+      } catch (e) {
+        console.error('❌ Error parsing stored auth:', e);
       }
+    } else {
+      console.log('⚠️ No auth data in localStorage');
     }
+    console.log('🌐 Making request to:', `${config.baseURL || ''}${config.url || ''}`);
     return config;
   },
   (error) => Promise.reject(error)
@@ -172,6 +178,88 @@ export const adminAPI = {
   // Deactivate family member
   deactivateFamilyMember: async (familyId: string) => {
     const response = await api.put(`/family/${familyId}/deactivate`);
+    return response.data;
+  },
+};
+
+// Nurse API functions
+export const nurseAPI = {
+  // Get all patients
+  getPatients: async () => {
+    const response = await api.get('/patients');
+    return response.data;
+  },
+
+  // Get patient notes
+  getPatientNotes: async (patientId: string) => {
+    const response = await api.get(`/patients/${patientId}/notes`);
+    return response.data;
+  },
+
+  // Create patient note
+  createPatientNote: async (patientId: string, noteData: {
+    text: string;
+    visibility: 'staff' | 'family';
+    tags?: string[];
+  }) => {
+    const response = await api.post(`/patients/${patientId}/notes`, noteData);
+    return response.data;
+  },
+
+  // Get patient documents/media
+  getPatientDocuments: async (patientId: string) => {
+    const response = await api.get(`/patients/${patientId}/media`);
+    return response.data;
+  },
+
+  // Upload document
+  uploadDocument: async (patientId: string, formData: FormData) => {
+    const response = await api.post(`/patients/${patientId}/media`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  // Get patient vital signs
+  getPatientVitals: async (patientId: string) => {
+    const response = await api.get(`/patients/${patientId}/vitals`);
+    return response.data;
+  },
+};
+
+// Family API functions
+export const familyAPI = {
+  // Get patient notes (family-visible only)
+  getPatientNotes: async (patientId: string) => {
+    const response = await api.get(`/patients/${patientId}/notes`);
+    return response.data;
+  },
+
+  // Create family note
+  createFamilyNote: async (patientId: string, noteData: {
+    text: string;
+    visibility: 'family';
+    tags?: string[];
+  }) => {
+    const response = await api.post(`/patients/${patientId}/notes`, noteData);
+    return response.data;
+  },
+
+  // Get patient documents/media
+  getPatientDocuments: async (patientId: string) => {
+    const response = await api.get(`/patients/${patientId}/media`);
+    return response.data;
+  },
+
+  // Upload document
+  uploadDocument: async (patientId: string, formData: FormData) => {
+    const response = await api.post(`/patients/${patientId}/media`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };

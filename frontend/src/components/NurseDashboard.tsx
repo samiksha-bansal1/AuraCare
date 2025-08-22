@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { LogOut, AlertTriangle, CheckCircle, Activity, Heart, Thermometer, Calendar, Upload, FileText } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { LogOut, AlertTriangle, CheckCircle, Activity, Heart, Thermometer, Calendar, Upload, FileText, X, Download } from 'lucide-react';
 import type { User } from '../contexts/AuthContext';
+import { nurseAPI } from '../services/api';
 
 import VitalChart from './VitalChart';
 import VideoStream from './VideoStream';
@@ -28,12 +29,83 @@ interface VitalReading {
   bloodPressureDia: number;
 }
 
+interface Patient {
+  _id: string;
+  patientId: string;
+  name: string;
+  email: string;
+  age: number;
+  condition: string;
+  roomNumber: string;
+  admissionDate: string;
+}
+
+interface ProgressNote {
+  _id: string;
+  patientId: string;
+  author: {
+    id: string;
+    name: string;
+    model: string;
+  };
+  text: string;
+  visibility: 'staff' | 'family';
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface MediaDocument {
+  _id: string;
+  patientId: string;
+  title: string;
+  type: string;
+  storage: {
+    kind: string;
+    key: string;
+    mime: string;
+    size: number;
+  };
+  uploadedBy: string;
+  createdAt: string;
+}
+
 const NurseDashboard: React.FC<NurseDashboardProps> = ({ user, onLogout }) => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [vitals, setVitals] = useState<VitalReading[]>([]);
   const [selectedSection, setSelectedSection] = useState<'vitals' | 'alerts' | 'medical' | 'history'>('vitals');
   const [patientCode, setPatientCode] = useState<string>('');
   const [autoRoom, setAutoRoom] = useState<string>('');
+
+  // Medical Records state
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<string>('');
+  const [notes, setNotes] = useState<ProgressNote[]>([]);
+  const [documents, setDocuments] = useState<MediaDocument[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Form states
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [noteVisibility, setNoteVisibility] = useState<'staff' | 'family'>('staff');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadDescription, setUploadDescription] = useState('');
+  // Upload progress tracking for future enhancement
+  // const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Load patients on component mount
+  useEffect(() => {
+    fetchPatients();
+  }, []);
+
+  // Load patient data when selected patient changes
+  useEffect(() => {
+    if (selectedPatient) {
+      loadPatientData(selectedPatient);
+    }
+  }, [selectedPatient]);
 
   // Auto-detect active room from localStorage so nurse can auto-join
   useEffect(() => {
@@ -133,13 +205,125 @@ const NurseDashboard: React.FC<NurseDashboardProps> = ({ user, onLogout }) => {
     return () => clearInterval(vitalInterval);
   }, []);
 
+  const fetchPatients = useCallback(async () => {
+    try {
+      setError(null);
+      console.log('🔍 Fetching patients...');
+      
+      // Debug: Check if we have a token
+      const token = localStorage.getItem('token');
+      console.log('🔑 Token exists:', !!token);
+      console.log('🔑 Token preview:', token ? token.substring(0, 20) + '...' : 'No token');
+      
+      const patients = await nurseAPI.getPatients();
+      console.log('✅ Patients fetched successfully:', patients.length);
+      setPatients(patients);
+      
+      if (patients.length === 0) {
+        setError('No patients found. Please contact your administrator to add patients to the system.');
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to fetch patients:', error);
+      console.error('❌ Error response:', error.response);
+      console.error('❌ Error status:', error.response?.status);
+      console.error('❌ Error data:', error.response?.data);
+      
+      if (error.response?.status === 401) {
+        setError('Authentication failed. Please log out and log back in.');
+      } else if (error.response?.status === 403) {
+        setError('Access denied. You may not have the required permissions to view patients.');
+      } else if (error.response?.status === 500) {
+        setError('Server error. Please contact your administrator or try again later.');
+      } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        setError('Cannot connect to server. Please ensure the backend server is running on port 5000.');
+      } else {
+        setError(error.response?.data?.error || error.message || 'Failed to fetch patients. Please try again.');
+      }
+    }
+  }, []);
+
+  const loadPatientData = async (patientId: string) => {
+    try {
+      setLoading(true);
+      const [notesData, documentsData] = await Promise.all([
+        nurseAPI.getPatientNotes(patientId).catch(() => []),
+        nurseAPI.getPatientDocuments(patientId).catch(() => [])
+      ]);
+
+      setNotes(notesData);
+      setDocuments(documentsData.data || documentsData);
+    } catch (err) {
+      console.error('Error loading patient data:', err);
+      setError('Failed to load patient data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateNote = async () => {
+    if (!noteText.trim() || !selectedPatient) return;
+
+    try {
+      setLoading(true);
+      console.log('🔍 Creating note for patient:', selectedPatient);
+      console.log('📝 Note data:', { text: noteText, visibility: noteVisibility });
+      console.log('🌐 API URL will be:', `http://localhost:5000/api/patients/${selectedPatient}/notes`);
+      
+      await nurseAPI.createPatientNote(selectedPatient, {
+        text: noteText,
+        visibility: noteVisibility
+      });
+
+      console.log('✅ Note created successfully');
+      // Reset form
+      setNoteText('');
+      setShowNoteForm(false);
+      loadPatientData(selectedPatient);
+    } catch (error: any) {
+      console.error('❌ Failed to create note:', error);
+      console.error('❌ Error response:', error.response);
+      setError(error.response?.data?.error || error.message || 'Failed to create note');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (!selectedFile || !selectedPatient) return;
+
+    try {
+      setIsUploading(true);
+      console.log('🔍 Uploading file for patient:', selectedPatient);
+      console.log('📁 File details:', { name: selectedFile.name, size: selectedFile.size, type: selectedFile.type });
+      
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('description', uploadDescription);
+      formData.append('title', selectedFile.name);
+      formData.append('type', uploadDescription || selectedFile.type);
+
+      await nurseAPI.uploadDocument(selectedPatient, formData);
+
+      console.log('✅ File uploaded successfully');
+      setSelectedFile(null);
+      setUploadDescription('');
+      loadPatientData(selectedPatient);
+    } catch (error: any) {
+      console.error('❌ Failed to upload file:', error);
+      console.error('❌ Error response:', error.response);
+      setError(error.response?.data?.error || error.message || 'Failed to upload document');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const resolveAlert = (alertId: string) => {
     setAlerts(prev => prev.map(alert =>
       alert.id === alertId ? { ...alert, resolved: true } : alert
     ));
   };
 
-  const currentVitals = vitals[vitals.length - 1];
+  const currentVitals = vitals[vitals.length - 1] || null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -361,40 +545,225 @@ const NurseDashboard: React.FC<NurseDashboardProps> = ({ user, onLogout }) => {
 
             {selectedSection === 'medical' && (
               <div className="space-y-6">
+                {/* Patient Selection */}
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-800">Medical Management</h3>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                    <Upload className="w-4 h-4" />
-                    Upload Document
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-lg font-semibold text-slate-800">Medical Management</h3>
+                    <select
+                      value={selectedPatient}
+                      onChange={(e) => setSelectedPatient(e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select Patient</option>
+                      {patients.map(patient => (
+                        <option key={patient._id} value={patient._id}>
+                          {patient.name} - Room {patient.roomNumber}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowNoteForm(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Add Note
+                    </button>
+                    <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer">
+                      <Upload className="w-4 h-4" />
+                      Upload Document
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp3,.mp4,.wav"
+                      />
+                    </label>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-slate-800">Recent Uploads</h4>
-                    <div className="space-y-2">
-                      <div className="p-3 border border-slate-200 rounded-lg">
-                        <p className="font-medium text-slate-800">Medication Schedule</p>
-                        <p className="text-sm text-slate-600">Uploaded 2 hours ago</p>
+                {error && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-800">{error}</p>
+                    <button
+                      onClick={() => setError(null)}
+                      className="mt-2 text-red-600 hover:text-red-800"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
+                {selectedPatient && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Documents Section */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-slate-800">Recent Documents</h4>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {documents.length > 0 ? (
+                          documents.map(doc => (
+                            <div key={doc._id} className="p-3 border border-slate-200 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="font-medium text-slate-800">{doc.title}</p>
+                                  <p className="text-sm text-slate-600">
+                                    {doc.type} • {new Date(doc.createdAt).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <button className="text-blue-600 hover:text-blue-800">
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-slate-500 text-center py-4">No documents uploaded</p>
+                        )}
                       </div>
-                      <div className="p-3 border border-slate-200 rounded-lg">
-                        <p className="font-medium text-slate-800">Lab Results</p>
-                        <p className="text-sm text-slate-600">Uploaded yesterday</p>
+                    </div>
+
+                    {/* Progress Notes Section */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-slate-800">Progress Notes</h4>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {notes.length > 0 ? (
+                          notes.map(note => (
+                            <div key={note._id} className="p-3 border border-slate-200 rounded-lg">
+                              <div className="flex items-start justify-between mb-2">
+                                <span className={`px-2 py-1 text-xs rounded-full ${
+                                  note.visibility === 'family' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {note.visibility === 'family' ? 'Family Visible' : 'Staff Only'}
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                  {new Date(note.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <p className="text-slate-800 text-sm">{note.text}</p>
+                              <p className="text-xs text-slate-500 mt-1">By: {note.author.name}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-slate-500 text-center py-4">No notes available</p>
+                        )}
                       </div>
                     </div>
                   </div>
+                )}
 
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-slate-800">Progress Notes</h4>
-                    <textarea
-                      className="w-full h-32 p-3 border border-slate-200 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Add progress notes..."
-                    />
-                    <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">
-                      Save Note
-                    </button>
+                {/* Note Creation Modal */}
+                {showNoteForm && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Add Progress Note</h3>
+                        <button
+                          onClick={() => setShowNoteForm(false)}
+                          className="text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Visibility
+                          </label>
+                          <select
+                            value={noteVisibility}
+                            onChange={(e) => setNoteVisibility(e.target.value as 'staff' | 'family')}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="staff">Staff Only</option>
+                            <option value="family">Visible to Family</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Note Text
+                          </label>
+                          <textarea
+                            value={noteText}
+                            onChange={(e) => setNoteText(e.target.value)}
+                            className="w-full h-32 px-3 py-2 border border-slate-200 rounded-lg resize-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter progress note..."
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleCreateNote}
+                            disabled={!noteText.trim() || loading}
+                            className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {loading ? 'Saving...' : 'Save Note'}
+                          </button>
+                          <button
+                            onClick={() => setShowNoteForm(false)}
+                            className="px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* File Upload Modal */}
+                {selectedFile && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Upload Document</h3>
+                        <button
+                          onClick={() => setSelectedFile(null)}
+                          className="text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm text-slate-600">Selected file:</p>
+                          <p className="font-medium">{selectedFile.name}</p>
+                          <p className="text-xs text-slate-500">
+                            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Description (optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={uploadDescription}
+                            onChange={(e) => setUploadDescription(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter description..."
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleFileUpload}
+                            disabled={isUploading}
+                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isUploading ? 'Uploading...' : 'Upload'}
+                          </button>
+                          <button
+                            onClick={() => setSelectedFile(null)}
+                            className="px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
