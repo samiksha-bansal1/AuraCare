@@ -24,6 +24,29 @@ class SocketService {
       // Join appropriate rooms
       this.handleConnection(socket);
       
+      // WebRTC Signaling Handlers
+      socket.on('webrtc_ready', (roomId) => {
+        logger.info(`[WebRTC] Ready signal received in room ${roomId}`);
+        socket.to(roomId).emit('webrtc_ready', { from: socket.id });
+      });
+
+      socket.on('webrtc_offer', ({ to, sdp, roomId }) => {
+        logger.info(`[WebRTC] Offer received in room ${roomId}`);
+        socket.to(roomId).emit('webrtc_offer', { from: socket.id, sdp });
+      });
+
+      socket.on('webrtc_answer', ({ to, sdp, roomId }) => {
+        logger.info(`[WebRTC] Answer received in room ${roomId}`);
+        socket.to(roomId).emit('webrtc_answer', { from: socket.id, sdp });
+      });
+
+      socket.on('webrtc_ice_candidate', ({ to, candidate, roomId }) => {
+        socket.to(roomId).emit('webrtc_ice_candidate', { 
+          from: socket.id, 
+          candidate 
+        });
+      });
+      
       // Set up disconnection handler
       socket.on(EVENTS.DISCONNECT, () => {
         logger.info(`Socket disconnected: ${socket.id}`);

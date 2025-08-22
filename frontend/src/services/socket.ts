@@ -7,6 +7,7 @@ class SocketService {
   connect(token: string) {
     const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
     this.lastToken = token;
+    
     // Close any existing socket to avoid parallel connections with wrong auth
     if (this.socket) {
       try { this.socket.off(); } catch {}
@@ -16,7 +17,35 @@ class SocketService {
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
+      forceNew: true,
+      autoConnect: true,
+      withCredentials: true,
+      extraHeaders: {
+        'Access-Control-Allow-Origin': window.location.origin,
+        'Access-Control-Allow-Credentials': 'true'
+      },
+      path: '/socket.io/'
+    });
+
+    // Add connection error handler
+    this.socket.io.on('error', (error: any) => {
+      console.error('[Socket] Connection error:', error);
+    });
+
+    // Add reconnection attempt handler
+    this.socket.io.on('reconnect_attempt', (attempt: number) => {
+      console.log(`[Socket] Reconnection attempt ${attempt}`);
+    });
+
+    // Add reconnection failed handler
+    this.socket.io.on('reconnect_failed', () => {
+      console.error('[Socket] Reconnection failed');
     });
 
     this.socket.on('connect', () => {
@@ -61,6 +90,16 @@ class SocketService {
 
   getSocket(): Socket | null {
     return this.socket;
+  }
+
+  // --- Notification helpers ---
+  sendAlert(patientId: string, message: string, type: 'urgent' | 'info' | 'warning' = 'info') {
+    this.socket?.emit('patient_alert', { patientId, message, type, timestamp: new Date().toISOString() });
+  }
+
+  onAlert(callback: (data: { patientId: string; message: string; type: string; timestamp: string }) => void) {
+    this.socket?.on('nurse_alert', callback);
+    return () => this.socket?.off('nurse_alert', callback);
   }
 
   // --- WebRTC signaling helpers ---

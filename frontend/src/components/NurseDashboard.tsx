@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LogOut, AlertTriangle, CheckCircle, Activity, Heart, Thermometer, Calendar, Upload, FileText, X, Download } from 'lucide-react';
+import { LogOut, AlertTriangle, CheckCircle, Activity, Heart, Thermometer, Calendar, Upload, FileText, X, Download, Bell } from 'lucide-react';
 import type { User } from '../contexts/AuthContext';
 import { nurseAPI } from '../services/api';
+import { useNotifications } from '../contexts/NotificationContext';
+import { socketService } from '../services/socket';
 
 import VitalChart from './VitalChart';
 import VideoStream from './VideoStream';
@@ -130,6 +132,17 @@ const NurseDashboard: React.FC<NurseDashboardProps> = ({ user, onLogout }) => {
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // Set up socket connection and event listeners
+  useEffect(() => {
+    // Connect to socket when component mounts
+    socketService.connect();
+    
+    // Clean up on unmount
+    return () => {
+      socketService.disconnect();
+    };
   }, []);
 
   // Simulate real-time data
@@ -325,6 +338,17 @@ const NurseDashboard: React.FC<NurseDashboardProps> = ({ user, onLogout }) => {
 
   const currentVitals = vitals[vitals.length - 1] || null;
 
+  const { sendAlert } = useNotifications();
+  
+  // Test notification function (can be removed in production)
+  const testNotification = () => {
+    sendAlert(
+      'TEST123', 
+      'This is a test notification from the system', 
+      'info'
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -335,6 +359,14 @@ const NurseDashboard: React.FC<NurseDashboardProps> = ({ user, onLogout }) => {
             <p className="text-slate-600">{user.name}</p>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={testNotification}
+              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+              title="Test Notification"
+            >
+              <Bell className="w-5 h-5" />
+              Test Alert
+            </button>
             <a
               href="/test"
               className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
