@@ -1,10 +1,13 @@
 const { EVENTS, ROOMS, getStandardEventName, getTargetRooms } = require('../constants/socketEvents');
 const logger = require('../utils/logger');
+const vitalsService = require('./vitalsService');
 
 class SocketService {
   constructor(io) {
     this.io = io;
     this.heartbeatInterval = null;
+    this.connectedUsers = new Map(); // userId -> socketId
+    this.patientRooms = new Map();   // patientId -> Set(socketId)
     this.initialize();
   }
 
@@ -47,6 +50,42 @@ class SocketService {
         });
       });
       
+      // Handle user authentication
+      socket.on('authenticate', ({ userId, userType }) => {
+        this.connectedUsers.set(userId, socket.id);
+        socket.userId = userId;
+        socket.userType = userType;
+        logger.info(`User ${userId} (${userType}) connected with socket ${socket.id}`);
+      });
+
+      // Handle patient vitals subscription
+      socket.on('subscribeToVitals', ({ patientId }) => {
+        if (!socket.userId) {
+          logger.warn(`Unauthorized subscription attempt from socket ${socket.id}`);
+          return;
+        }
+
+        // Join patient's vitals room
+        socket.join(`vitals:${patientId}`);
+        
+        // Start monitoring if not already started
+        vitalsService.startMonitoring(patientId);
+        
+        // Send current vitals immediately
+        const currentVitals = vitalsService.getVitals(patientId);
+        if (currentVitals) {
+          socket.emit('vitalsUpdate', { patientId, vitals: currentVitals });
+        }
+        
+        logger.info(`User ${socket.userId} subscribed to vitals for patient ${patientId}`);
+      });
+
+      // Handle unsubscription
+      socket.on('unsubscribeFromVitals', ({ patientId }) => {
+        socket.leave(`vitals:${patientId}`);
+        logger.info(`User ${socket.userId} unsubscribed from vitals for patient ${patientId}`);
+      });
+
       // Set up disconnection handler
       socket.on(EVENTS.DISCONNECT, () => {
         logger.info(`Socket disconnected: ${socket.id}`);
@@ -58,6 +97,16 @@ class SocketService {
         logger.error(`Socket error (${socket.id}):`, error);
       });
     });
+
+    // Listen for vitals updates from the vitals service
+    vitalsService.on('vitalsUpdate', ({ patientId, vitals }) => {
+      this.io.to(`vitals:${patientId}`).emit('vitalsUpdate', { patientId, vitals });
+    });
+
+    // Initialize vitals service
+    vitalsService.init();
+
+    logger.info('Socket service initialized');
   }
 
   handleConnection(socket) {
@@ -76,6 +125,12 @@ class SocketService {
   handleDisconnection(socket) {
     // Clean up any room memberships or resources
     // Note: Socket.IO automatically removes socket from rooms on disconnect
+    if (socket.userId) {
+      this.connectedUsers.delete(socket.userId);
+      logger.info(`User ${socket.userId} disconnected`);
+    } else {
+      logger.info(`Anonymous client disconnected: ${socket.id}`);
+    }
   }
 
   startHeartbeat() {
@@ -146,6 +201,13 @@ class SocketService {
   getClientsInRoom(room) {
     const roomSockets = this.io.sockets.adapter.rooms.get(room);
     return roomSockets ? Array.from(roomSockets) : [];
+  }
+
+  // Get socket by user ID
+  getSocketByUserId(userId) {
+    const socketId = this.connectedUsers.get(userId);
+    if (!socketId) return null;
+    return this.io.sockets.sockets.get(socketId);
   }
 }
 
