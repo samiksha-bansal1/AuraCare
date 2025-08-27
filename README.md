@@ -213,10 +213,6 @@ npm start
 
 This project is licensed under the ISC License.
 
-## 📞 Contact
-
-- Email: himanimahajan2709@gmail.com
-- Phone: +91-6239215554
 
 ## 🙏 Acknowledgments
 
