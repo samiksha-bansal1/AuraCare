@@ -1,8 +1,12 @@
 # AuraCare - AI-Powered Emotional Care for Patients
 
-AuraCare revolutionizes ICU care by combining cutting-edge AI with compassionate interventions — improving patient well-being, supporting medical staff, and engaging families.
 
+AuraCare revolutionizes ICU care by combining cutting-edge AI with compassionate interventions — improving patient well-being, supporting medical staff, and engaging families.
 ## 🚀 Features
+
+<div align="center">
+  <img src="https://media.giphy.com/media/26tn33aiTi1jkl6H6/giphy.gif" width="150">
+</div>
 
 ### Frontend (React + TypeScript)
 - **Modern UI/UX**: Beautiful, responsive design with Tailwind CSS
@@ -10,6 +14,7 @@ AuraCare revolutionizes ICU care by combining cutting-edge AI with compassionate
 - **Role-based Dashboards**: Customized interfaces for each user type
 - **Real-time Monitoring**: Patient vital signs and emotional state tracking
 - **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
+
 
 ### Backend (Node.js + Express + TypeScript)
 - **RESTful API**: Complete authentication and user management
@@ -43,12 +48,17 @@ AuraCare/
 
 ## 🛠️ Installation & Setup
 
+<div align="center">
+  <img src="https://media.giphy.com/media/ZVik7pBtu9dNS/giphy.gif" width="150">
+</div>
+
 ### Prerequisites
 - Node.js (v16 or higher)
 - npm or yarn
 - MongoDB (local or cloud instance)
 
 ### Backend Setup
+
 
 1. Navigate to the backend directory:
 ```bash
@@ -78,6 +88,10 @@ npm run dev
 The backend API will be available at `http://localhost:5000`
 
 ### Frontend Setup
+
+<div align="center">
+  <img src="https://media.giphy.com/media/eNAsjO55tPbgaor7ma/giphy.gif" width="100">
+</div>
 
 1. Navigate to the frontend directory:
 ```bash
@@ -119,19 +133,29 @@ npm run dev
 
 ## 👥 User Types & Authentication
 
+<div align="center">
+  <img src="https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif" width="200">
+</div>
 ### Patient
 - **Login Fields**: Patient ID, Patient Name, Room Number
 - **Features**: View personal health data, emotional state, and receive calming interventions
+
+
 
 ### Nurse
 - **Login Fields**: Nurse ID, Room Number, Password, Patient ID
 - **Features**: Monitor multiple patients, receive alerts, manage interventions
 
+
+
 ### Family Member
 - **Login Fields**: Patient Name, Patient ID, Password, Family Member Name
 - **Features**: View patient status, receive updates, communicate with care team
 
+
 ## 🔧 API Endpoints
+
+
 
 ### Authentication
 - `POST /api/auth/register` - Register new user
@@ -142,6 +166,10 @@ npm run dev
 - `GET /api/health` - API status check
 
 ## 🔌 Integration Features
+
+<div align="center">
+  <img src="https://media.giphy.com/media/3oKIPEqDGUULpEU0aQ/giphy.gif" width="150">
+</div>
 
 ### Real-time Communication
 - **Socket.IO Integration**: Real-time updates for vital signs, alerts, and family content sharing
@@ -180,6 +208,7 @@ npm run dev
 
 ## 🔒 Security Features
 
+
 - JWT token authentication
 - Password hashing with bcrypt
 - CORS protection
@@ -187,6 +216,10 @@ npm run dev
 - Protected routes
 
 ## 🚀 Deployment
+
+<div align="center">
+  <img src="https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" width="120">
+</div>
 
 ### Frontend
 ```bash
@@ -203,6 +236,7 @@ npm start
 
 ## 🤝 Contributing
 
+
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
@@ -211,10 +245,14 @@ npm start
 
 ## 📝 License
 
+<div align="center">
+  <img src="https://media.giphy.com/media/du3J3cXyzhj75IOgvA/giphy.gif" width="100">
+</div>
+
 This project is licensed under the ISC License.
 
-
 ## 🙏 Acknowledgments
+
 
 - React and TypeScript communities
 - Tailwind CSS for styling
